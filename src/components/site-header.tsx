@@ -12,6 +12,8 @@ export async function SiteHeader() {
       <nav className="flex items-center gap-4 text-zinc-300">
         {user ? (
           <>
+            <Link href="/feed">Feed</Link>
+            {user.role === "admin" && <Link href="/admin/posts">Admin</Link>}
             <Link href="/account">@{user.handle}</Link>
             <form action={signOutAction}>
               <button type="submit" className="hover:text-white">

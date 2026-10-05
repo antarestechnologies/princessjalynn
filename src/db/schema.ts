@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
@@ -134,6 +134,10 @@ export const media = pgTable(
     durationSeconds: integer(),
     width: integer(),
     height: integer(),
+    /** For images: the storage key of the full-size file. Null for provider-hosted video. */
+    storageKey: text(),
+    contentType: text(),
+    sizeBytes: integer(),
     /** Storage keys (not URLs) for the poster and the blurred locked-state preview. */
     thumbnailKey: text(),
     blurredPreviewKey: text(),
@@ -394,3 +398,40 @@ export const ageVerifications = pgTable(
     uniqueIndex("age_verifications_provider_ref_idx").on(t.provider, t.providerRef),
   ],
 );
+
+// ---------- playback (Phase 3) ----------
+/**
+ * One row per signed playback/view grant. This is the leak-tracing record: given a leaked
+ * frame's watermark (handle + time) or a token, find who was issued access to what and when.
+ */
+export const playbackGrants = pgTable(
+  "playback_grants",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    mediaId: uuid()
+      .notNull()
+      .references(() => media.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    issuedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    /** Truncated, never a full IP. */
+    ipPrefix: text(),
+    /** Short random id also drawn into the watermark so a frame maps to exactly one grant. */
+    watermarkNonce: text().notNull(),
+  },
+  (t) => [
+    index("playback_grants_media_idx").on(t.mediaId, t.issuedAt),
+    index("playback_grants_user_idx").on(t.userId, t.issuedAt),
+  ],
+);
+
+// ---------- relations (for db.query.*.findMany({ with })) ----------
+export const postsRelations = relations(posts, ({ many }) => ({
+  media: many(media),
+}));
+
+export const mediaRelations = relations(media, ({ one }) => ({
+  post: one(posts, { fields: [media.postId], references: [posts.id] }),
+}));

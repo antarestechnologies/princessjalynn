@@ -46,6 +46,34 @@ npm run check                   # lint + typecheck + format + test, same as CI
 Try the flow locally: `npm run dev`, open `/`, pass the gate, sign up, copy the confirmation
 link from the terminal, sign in, go to `/verify-age` and pick an outcome on the stub page.
 
+## Phase 3: content and video
+
+- Vendors sit behind `VideoProvider` and `ImageStorage` (`src/media/`). `MEDIA_PROVIDER=fake`
+  stores files under `.data/media` and serves them through `/api/media/local/...` with an
+  HMAC token and expiry. `bunny` uses Bunny Stream (video, tus upload straight from the
+  browser, token-authenticated embed) and Bunny Storage + CDN (images, token-authenticated
+  URLs). The Bunny header names and hash recipes were written from the Phase 0 research and
+  must be confirmed against Bunny's docs before the first real upload.
+- Access is decided in one place, `resolveAccess` in `src/access/entitlements.ts`. Free
+  posts still need a signed-in, age-verified viewer. Subscriber posts need a live
+  `entitlements` row of kind `subscription`; pay-per-view posts need a `post` entitlement.
+  Payments (Phase 4) write those rows. No media URL is produced before that check passes.
+- Every URL expires (15 minutes for playback, 1 hour for posters) and each issue is recorded
+  in `playback_grants` with the viewer, media, IP prefix and a nonce.
+- The viewer draws a moving watermark (`@handle · nonce · time`) over every item. The nonce
+  maps a leaked frame to one grant row. Deterrents (no context menu, no download control, no
+  picture-in-picture, blur on tab blur) raise the effort for casual saving. They do not stop
+  screen recording or a phone camera. Bunny's DRM add-on can be enabled later for iOS/Safari
+  and Android L1 recording protection; nothing stops desktop capture.
+- Images are re-encoded on upload (camera metadata removed) into an original, a poster and
+  a tiny blurred preview used for locked posts. Video posters come from the provider and are
+  blurred the same way.
+- Admin (`/admin/posts`, requires role `admin`): create posts, set tier and price, upload
+  media, publish now or schedule. Promote an account with `npm run make-admin -- <email>`.
+  Scheduled posts go live at `publishAt` with no cron.
+- Vercel caps request bodies near 4.5 MB, so images larger than that must be resized first;
+  videos never pass through Vercel with the Bunny provider.
+
 ## Database changes
 
 1. Edit `src/db/schema.ts`.

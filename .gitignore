@@ -30,3 +30,4 @@ next-env.d.ts
 *.pem
 *.log
 npm-debug.log*
+/.data/

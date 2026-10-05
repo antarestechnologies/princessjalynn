@@ -21,6 +21,23 @@ const schema = z
     /** e.g. "Members <no-reply@example.com>". Must be a sender verified at SendGrid. */
     EMAIL_FROM: z.string().min(3).default("Members <no-reply@localhost>"),
     AGE_VERIFIER: z.enum(["stub"]).default("stub"),
+    /** fake = files on local disk served through our signed route (dev only). bunny = Bunny Stream + Storage. */
+    MEDIA_PROVIDER: z.enum(["fake", "bunny"]).default("fake"),
+    MEDIA_LOCAL_DIR: z.string().default(".data/media"),
+    BUNNY_STREAM_LIBRARY_ID: z.string().min(1).optional(),
+    BUNNY_STREAM_API_KEY: z.string().min(1).optional(),
+    /** Pull-zone hostname for the Stream library, e.g. vz-abc123.b-cdn.net */
+    BUNNY_STREAM_CDN_HOST: z.string().min(1).optional(),
+    /** "Embed view token authentication key" from the library's security settings. */
+    BUNNY_STREAM_TOKEN_KEY: z.string().min(1).optional(),
+    BUNNY_STORAGE_ZONE: z.string().min(1).optional(),
+    BUNNY_STORAGE_PASSWORD: z.string().min(1).optional(),
+    /** storage.bunnycdn.com or a regional host like ny.storage.bunnycdn.com */
+    BUNNY_STORAGE_HOST: z.string().default("storage.bunnycdn.com"),
+    /** Pull-zone hostname in front of the storage zone, e.g. media-abc.b-cdn.net */
+    BUNNY_CDN_HOST: z.string().min(1).optional(),
+    /** "Token authentication key" from the pull zone's security settings. */
+    BUNNY_CDN_TOKEN_KEY: z.string().min(1).optional(),
     /** The stub verifier passes anyone who clicks. It is refused in production unless this is set. */
     ALLOW_STUB_AGE_VERIFIER: z
       .enum(["true", "false"])
@@ -43,6 +60,32 @@ const schema = z
           message:
             "console mailer only prints links to the log; set EMAIL_PROVIDER=sendgrid in production",
         });
+      }
+    }
+    if (v.NODE_ENV === "production" && v.MEDIA_PROVIDER === "fake") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MEDIA_PROVIDER"],
+        message: "fake media provider is dev-only",
+      });
+    }
+    if (v.MEDIA_PROVIDER === "bunny") {
+      for (const k of [
+        "BUNNY_STREAM_LIBRARY_ID",
+        "BUNNY_STREAM_API_KEY",
+        "BUNNY_STREAM_CDN_HOST",
+        "BUNNY_STREAM_TOKEN_KEY",
+        "BUNNY_STORAGE_ZONE",
+        "BUNNY_STORAGE_PASSWORD",
+        "BUNNY_CDN_HOST",
+        "BUNNY_CDN_TOKEN_KEY",
+      ] as const) {
+        if (!v[k])
+          ctx.addIssue({
+            code: "custom",
+            path: [k],
+            message: "required when MEDIA_PROVIDER=bunny",
+          });
       }
     }
     if (v.EMAIL_PROVIDER === "sendgrid" && !v.SENDGRID_API_KEY) {
