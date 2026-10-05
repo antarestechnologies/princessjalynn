@@ -1,14 +1,32 @@
 # dependencies
-node_modules/
-# env — secrets never committed (PLAN.md non-negotiable #6)
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# env — secrets live in env vars only (PLAN.md non-negotiable #6)
 .env
 .env.*
 !.env.example
-# build output
-.next/
-out/
-dist/
-coverage/
-# OS / editor
+
+# vercel
+.vercel
+
+# local databases / scratch
+/.pglite/
+*.local
+
+# misc
 .DS_Store
+*.pem
 *.log
+npm-debug.log*
