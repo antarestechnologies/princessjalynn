@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+# env — secrets never committed (PLAN.md non-negotiable #6)
+.env
+.env.*
+!.env.example
+# build output
+.next/
+out/
+dist/
+coverage/
+# OS / editor
+.DS_Store
+*.log
