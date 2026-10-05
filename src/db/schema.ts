@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -53,6 +54,13 @@ export const takedownStatus = pgEnum("takedown_status", [
   "reviewing",
   "actioned",
   "rejected",
+]);
+export const authTokenKind = pgEnum("auth_token_kind", ["email_verify", "password_reset"]);
+export const ageVerificationStatus = pgEnum("age_verification_status", [
+  "pending",
+  "passed",
+  "failed",
+  "expired",
 ]);
 
 // ---------- users ----------
@@ -294,4 +302,95 @@ export const takedownRequests = pgTable(
     ...timestamps,
   },
   (t) => [index("takedown_requests_status_idx").on(t.status, t.createdAt)],
+);
+
+// ---------- auth (Phase 2) ----------
+/**
+ * Server-side sessions. The browser cookie holds a random 256-bit token; only its SHA-256
+ * lands here, so a database read never yields a usable session. Sliding expiry is applied
+ * by the auth service when a session is older than SESSION_RENEW_AFTER.
+ */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text().notNull(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Truncated (/24 or /48), never a full IP. */
+    ipPrefix: text(),
+    /** First 200 chars of the user agent; enough to show "which device" in Account. */
+    userAgent: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("sessions_token_hash_idx").on(t.tokenHash),
+    index("sessions_user_id_idx").on(t.userId),
+    index("sessions_expires_at_idx").on(t.expiresAt),
+  ],
+);
+
+/** Single-use tokens for email verification and password reset. Hash only, like sessions. */
+export const authTokens = pgTable(
+  "auth_tokens",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: authTokenKind().notNull(),
+    tokenHash: text().notNull(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    usedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("auth_tokens_token_hash_idx").on(t.tokenHash),
+    index("auth_tokens_user_kind_idx").on(t.userId, t.kind),
+  ],
+);
+
+/**
+ * Fixed-window rate-limit counters, keyed by e.g. "login:ip:203.0.113.0/24". Lives in
+ * Postgres so every serverless instance shares one view; at ~20 concurrent users this is
+ * plenty. Old windows are purged opportunistically by the limiter.
+ */
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text().notNull(),
+    windowStart: timestamp({ withTimezone: true }).notNull(),
+    count: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.key, t.windowStart] })],
+);
+
+/**
+ * One row per age-verification attempt. Stores the vendor's opaque reference and outcome,
+ * never the document, selfie or extracted identity data (non-negotiable #5). A pass also
+ * sets users.ageVerifiedAt, which is what access checks read.
+ */
+export const ageVerifications = pgTable(
+  "age_verifications",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** AgeVerifier implementation name, e.g. 'stub', 'verifymy'. */
+    provider: text().notNull(),
+    providerRef: text(),
+    status: ageVerificationStatus().notNull().default("pending"),
+    /** Vendor-supplied non-identifying detail (method used, failure reason code). Scrubbed by caller. */
+    metadata: jsonb().$type<Record<string, unknown>>(),
+    startedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [
+    index("age_verifications_user_idx").on(t.userId, t.startedAt),
+    uniqueIndex("age_verifications_provider_ref_idx").on(t.provider, t.providerRef),
+  ],
 );

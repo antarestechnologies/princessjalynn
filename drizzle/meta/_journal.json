@@ -15,6 +15,13 @@
       "when": 1791175639221,
       "tag": "0001_audit_log_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791177109201,
+      "tag": "0002_phase2_auth",
+      "breakpoints": true
     }
   ]
 }
