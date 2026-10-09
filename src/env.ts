@@ -135,6 +135,34 @@ export type Env = z.infer<typeof schema>;
 
 export type EnvSource = Record<string, string | undefined>;
 
+/**
+ * Names (never values) of variables that are missing or invalid. Used by /api/health and the
+ * proxy so a misconfigured deployment says what is wrong instead of a bare 500.
+ */
+export function envProblems(source: EnvSource = process.env): string[] {
+  const names = new Set<string>();
+  // Zod skips the production cross-checks while a basic field is invalid, so neutralise each
+  // failing field (placeholder or default) and parse again until nothing new appears.
+  let probe: EnvSource = { ...source };
+  for (let pass = 0; pass < 4; pass++) {
+    const result = schema.safeParse(probe);
+    if (result.success) break;
+    let changed = false;
+    for (const issue of result.error.issues) {
+      const key = String(issue.path[0] ?? "(root)");
+      if (!names.has(key)) changed = true;
+      names.add(key);
+      if (key === "DATABASE_URL") probe = { ...probe, DATABASE_URL: "postgres://placeholder/db" };
+      else if (key !== "(root)") probe = { ...probe, [key]: undefined };
+    }
+    if (!changed) break;
+  }
+  const secret = source.SESSION_SECRET;
+  if (source.NODE_ENV === "production" && (!secret || secret.length < 32))
+    names.add("SESSION_SECRET");
+  return [...names].sort();
+}
+
 export function parseEnv(source: EnvSource = process.env): Env {
   const result = schema.safeParse(source);
   if (!result.success) {
