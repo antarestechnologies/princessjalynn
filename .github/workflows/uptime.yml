@@ -1,0 +1,27 @@
+name: Uptime
+
+# Lightweight external check of the live site. Set the repository variable APP_URL
+# (Settings > Secrets and variables > Actions > Variables) to the public origin, e.g.
+# https://example.com. A failed run emails the repository owner via GitHub's normal
+# workflow-failure notifications. Use a dedicated monitor as well (see docs/runbooks).
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health:
+    if: ${{ vars.APP_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: GET /api/health
+        run: |
+          set -euo pipefail
+          for i in 1 2 3; do
+            code=$(curl -s -o body.txt -w "%{http_code}" --max-time 15 "${{ vars.APP_URL }}/api/health" || echo 000)
+            if [ "$code" = "200" ] && grep -q '"ok":true' body.txt; then echo "healthy"; exit 0; fi
+            echo "attempt $i: HTTP $code $(cat body.txt 2>/dev/null | head -c 200)"; sleep 20
+          done
+          echo "::error::Health check failed for ${{ vars.APP_URL }}"
+          exit 1

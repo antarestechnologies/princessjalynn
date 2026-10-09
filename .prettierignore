@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+coverage
+drizzle/meta
+drizzle/*.sql
+package-lock.json
+next-env.d.ts
+docs/phase0
