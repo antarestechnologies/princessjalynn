@@ -82,6 +82,16 @@ const schema = z
         });
       }
     }
+    if (
+      v.NODE_ENV === "production" &&
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(v.APP_URL)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["APP_URL"],
+        message: "set to the site's public https origin in production (email links use it)",
+      });
+    }
     if (v.NODE_ENV === "production" && !v.VAULT_ENCRYPTION_KEY) {
       ctx.addIssue({
         code: "custom",
