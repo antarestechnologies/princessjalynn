@@ -43,6 +43,9 @@ export default async function AccountPage() {
             Verify your age to unlock content
           </Link>
         )}
+        <Link href="/account/billing" className="block text-sm underline">
+          Membership and billing
+        </Link>
         <form action={signOutAction}>
           <Button variant="secondary">Sign out</Button>
         </form>

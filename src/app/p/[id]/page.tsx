@@ -7,6 +7,7 @@ import { getPost } from "@/content/service";
 import { getDb } from "@/db/client";
 import { getImageStorage, getVideoProvider } from "@/media";
 import { MediaViewer } from "@/components/media-viewer";
+import { SubscribeButton, TipForm, UnlockButton } from "@/components/pay-buttons";
 import { tierLabel } from "@/components/post-card";
 
 export default async function PostPage({ params }: { params: Promise<{ id: string }> }) {
@@ -40,6 +41,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
         <Locked
           reason={access.reason}
           label={tierLabel(post)}
+          postId={post.id}
           previews={post.media
             .filter((m) => m.status === "ready")
             .map((m) => previewUrl(storage, m, now))}
@@ -48,6 +50,11 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
       {post.caption && (
         <p className="mt-6 whitespace-pre-wrap text-sm text-zinc-300">{post.caption}</p>
+      )}
+      {access.allowed && user.role !== "admin" && (
+        <div className="mt-6 border-t border-zinc-800 pt-4">
+          <TipForm postId={post.id} />
+        </div>
       )}
       <p className="mt-6 text-sm">
         <Link href="/feed" className="underline">
@@ -75,10 +82,12 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 function Locked({
   reason,
   label,
+  postId,
   previews,
 }: {
   reason: string;
   label: string;
+  postId: string;
   previews: (string | null)[];
 }) {
   return (
@@ -102,19 +111,13 @@ function Locked({
       </div>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50 p-6 text-center">
         <span className="text-3xl">🔒</span>
-        <p className="text-sm text-zinc-200">
-          {reason === "purchase_required"
-            ? `Unlock this post for ${label}`
-            : "Subscribe to view this post"}
-        </p>
-        <button
-          type="button"
-          disabled
-          className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 opacity-60"
-        >
-          {reason === "purchase_required" ? `Unlock · ${label}` : "Subscribe"} (payments arrive in
-          Phase 4)
-        </button>
+        <div className="w-full max-w-xs">
+          {reason === "purchase_required" ? (
+            <UnlockButton postId={postId} label={`Unlock for ${label}`} />
+          ) : (
+            <SubscribeButton label="Subscribe to view" />
+          )}
+        </div>
       </div>
     </div>
   );

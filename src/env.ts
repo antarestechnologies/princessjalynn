@@ -21,6 +21,16 @@ const schema = z
     /** e.g. "Members <no-reply@example.com>". Must be a sender verified at SendGrid. */
     EMAIL_FROM: z.string().min(3).default("Members <no-reply@localhost>"),
     AGE_VERIFIER: z.enum(["stub"]).default("stub"),
+    /** fake = in-app simulated processor (dev only). Real adapters are added once a processor approves. */
+    PAYMENT_PROCESSOR: z.enum(["fake"]).default("fake"),
+    ALLOW_FAKE_PAYMENTS: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    SUBSCRIPTION_PRICE_CENTS: z.coerce.number().int().min(100).default(1500),
+    /** What appears on the fan's card statement. Must match the processor's configuration. */
+    BILLING_DESCRIPTOR: z.string().min(3).max(25).default("MBRS*ONLINE"),
+    GRACE_PERIOD_DAYS: z.coerce.number().int().min(0).max(30).default(3),
     /** fake = files on local disk served through our signed route (dev only). bunny = Bunny Stream + Storage. */
     MEDIA_PROVIDER: z.enum(["fake", "bunny"]).default("fake"),
     MEDIA_LOCAL_DIR: z.string().default(".data/media"),
@@ -61,6 +71,13 @@ const schema = z
             "console mailer only prints links to the log; set EMAIL_PROVIDER=sendgrid in production",
         });
       }
+    }
+    if (v.NODE_ENV === "production" && v.PAYMENT_PROCESSOR === "fake" && !v.ALLOW_FAKE_PAYMENTS) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROCESSOR"],
+        message: "fake processor is dev-only (ALLOW_FAKE_PAYMENTS=true only for a staging deploy)",
+      });
     }
     if (v.NODE_ENV === "production" && v.MEDIA_PROVIDER === "fake") {
       ctx.addIssue({

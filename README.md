@@ -74,6 +74,36 @@ link from the terminal, sign in, go to `/verify-age` and pick an outcome on the 
 - Vercel caps request bodies near 4.5 MB, so images larger than that must be resized first;
   videos never pass through Vercel with the Bunny provider.
 
+## Phase 4: payments
+
+- Processors sit behind `PaymentProcessor` (`src/payments/types.ts`): `createCheckout`,
+  `parseWebhook`, `cancelSubscription`, `refund`. Card data never touches this site; every
+  checkout is the processor's hosted page, and we store only processor ids.
+- Each adapter turns its vendor's webhooks into a small set of normalized events. One state
+  machine (`src/payments/service.ts`) applies them and is the only code that writes
+  `subscriptions`, `purchases`, `tips` and `entitlements`.
+- Webhooks arrive at `/api/webhooks/<processor>`, which is exempt from the age gate and
+  protected by the adapter's signature check. A bad signature is a 400 and nothing is stored.
+  Every event id is recorded in `webhook_events`, so a replay is a no-op.
+- What each event does:
+  - **created / renewed**: subscription active, access until the period end, receipt emailed.
+  - **renewal_failed**: status `past_due`, access continues for `GRACE_PERIOD_DAYS` (default 3).
+  - **canceled**: no further renewals; access runs to the end of what was paid.
+  - **expired**: access revoked.
+  - **refunded**: that payment's access revoked; a refunded membership ends.
+  - **chargeback**: every entitlement on the account revoked and the account flagged.
+- `PAYMENT_PROCESSOR=fake` is a simulator for development. Checkout goes to `/pay/fake/<id>`
+  with approve/decline buttons, and `/admin/fake-payments` can renew, fail, cancel, expire,
+  refund or charge back any payment. Each button sends a signed webhook through the real
+  ingest path. Production refuses the fake processor unless `ALLOW_FAKE_PAYMENTS=true`.
+- Fans: `/subscribe`, unlock buttons on PPV posts, tips on unlocked posts, and
+  `/account/billing` with cancel-anytime and payment history. The billing descriptor
+  (`BILLING_DESCRIPTOR`) is shown before checkout and on every receipt.
+- Admin: `/admin/revenue` shows subscribers, MRR, past-due count, this month's memberships,
+  unlocks, tips and refunds, and the 90-day chargeback rate, which turns amber at 0.5%.
+- Adding a real processor means one new adapter file plus an entry in `src/payments/index.ts`.
+  The state machine and tests do not change.
+
 ## Database changes
 
 1. Edit `src/db/schema.ts`.

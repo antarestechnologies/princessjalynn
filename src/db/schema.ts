@@ -56,6 +56,13 @@ export const takedownStatus = pgEnum("takedown_status", [
   "rejected",
 ]);
 export const authTokenKind = pgEnum("auth_token_kind", ["email_verify", "password_reset"]);
+export const checkoutKind = pgEnum("checkout_kind", ["subscription", "ppv", "tip"]);
+export const checkoutStatus = pgEnum("checkout_status", [
+  "pending",
+  "completed",
+  "failed",
+  "abandoned",
+]);
 export const ageVerificationStatus = pgEnum("age_verification_status", [
   "pending",
   "passed",
@@ -435,3 +442,70 @@ export const postsRelations = relations(posts, ({ many }) => ({
 export const mediaRelations = relations(media, ({ one }) => ({
   post: one(posts, { fields: [media.postId], references: [posts.id] }),
 }));
+
+// ---------- payments (Phase 4) ----------
+/**
+ * One row per hosted-checkout redirect. Ties the processor's callback back to the user and
+ * what they were buying. Card data never touches us: the processor hosts the form.
+ */
+export const checkoutSessions = pgTable(
+  "checkout_sessions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: checkoutKind().notNull(),
+    postId: uuid().references(() => posts.id, { onDelete: "set null" }),
+    amountCents: integer().notNull(),
+    currency: text().notNull().default("USD"),
+    /** Line shown on the processor's page; discreet. */
+    description: text().notNull(),
+    processor: text().notNull(),
+    processorRef: text(),
+    status: checkoutStatus().notNull().default("pending"),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index("checkout_sessions_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** Idempotency ledger: a processor event id is applied at most once. */
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    processor: text().notNull(),
+    eventId: text().notNull(),
+    type: text().notNull(),
+    /** Scrubbed copy of the normalized event for support/debugging. */
+    payload: jsonb().$type<Record<string, unknown>>(),
+    receivedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp({ withTimezone: true }),
+    error: text(),
+  },
+  (t) => [uniqueIndex("webhook_events_processor_event_idx").on(t.processor, t.eventId)],
+);
+
+/** Each successful subscription charge (initial and renewals), for receipts and revenue. */
+export const subscriptionPayments = pgTable(
+  "subscription_payments",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    subscriptionId: uuid()
+      .notNull()
+      .references(() => subscriptions.id, { onDelete: "cascade" }),
+    processor: text().notNull(),
+    processorTransactionId: text().notNull(),
+    amountCents: integer().notNull(),
+    currency: text().notNull().default("USD"),
+    status: paymentStatus().notNull().default("paid"),
+    periodStart: timestamp({ withTimezone: true }).notNull(),
+    periodEnd: timestamp({ withTimezone: true }).notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("subscription_payments_txn_idx").on(t.processor, t.processorTransactionId),
+    index("subscription_payments_sub_idx").on(t.subscriptionId, t.createdAt),
+  ],
+);

@@ -73,6 +73,7 @@ Claude Code should research and report; Carson decides.
 - Discreet billing descriptor, cancel-anytime page, receipts by email
 - Admin revenue view: subscribers, MRR, PPV, tips, refunds, chargeback rate (processors watch this number)
 - Done when: every subscription state change in the fake provider is reflected correctly in access, with tests.
+- **Defaults used (2026-10-09):** $15/month subscription, 3-day grace period after a failed renewal, a subscription does not unlock PPV posts, tips $1 to $500. All are env settings except the PPV rule.
 
 ## Phase 5 — Compliance
 

@@ -29,6 +29,13 @@
       "when": 1791178610642,
       "tag": "0003_phase3_media",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791564111135,
+      "tag": "0004_phase4_payments",
+      "breakpoints": true
     }
   ]
 }
