@@ -33,10 +33,12 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
+    "@types/autocannon": "^7.12.7",
     "@types/node": "^22",
     "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autocannon": "^8.0.0",
     "dotenv": "^17.2.0",
     "drizzle-kit": "^0.31.0",
     "eslint": "^9",
@@ -45,6 +47,6 @@
     "tailwindcss": "^4",
     "tsx": "^4.20.0",
     "typescript": "^5",
-    "vitest": "^3.2.0"
+    "vitest": "^5.0.3"
   }
 }

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
+import { crossSiteRejection } from "@/lib/same-origin";
 import { recordAudit } from "@/auth/audit";
 import { getCurrentUser } from "@/auth/session";
 import { getDb } from "@/db/client";
@@ -15,6 +16,8 @@ const MAX_LOCAL_VIDEO_BYTES = 200 * 1024 * 1024;
  * With Bunny the browser uploads straight to the vendor via tus and this route answers 404.
  */
 export async function PUT(request: NextRequest) {
+  const csrf = crossSiteRejection(request);
+  if (csrf) return csrf;
   const user = await getCurrentUser();
   if (!user || user.role !== "admin")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

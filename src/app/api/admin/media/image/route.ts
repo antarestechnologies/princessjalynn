@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { crossSiteRejection } from "@/lib/same-origin";
 import { getCurrentUser } from "@/auth/session";
 import { createImageMedia, getPost } from "@/content/service";
 import { getDb } from "@/db/client";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
  * upload in a later phase.
  */
 export async function POST(request: NextRequest) {
+  const csrf = crossSiteRejection(request);
+  if (csrf) return csrf;
   const user = await getCurrentUser();
   if (!user || user.role !== "admin")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

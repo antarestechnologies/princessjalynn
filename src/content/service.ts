@@ -41,11 +41,23 @@ export type PostInput = z.infer<typeof postInputSchema>;
 export const publishedWhere = (now: Date) =>
   or(eq(posts.status, "published"), and(eq(posts.status, "scheduled"), lte(posts.publishAt, now)));
 
-export async function listPublishedPosts(db: AppDb, now = new Date()): Promise<PostWithMedia[]> {
+export const FEED_PAGE_SIZE = 24;
+
+/** Newest first. Paged so the feed stays fast as the back catalogue grows (Phase 6 load test). */
+export async function listPublishedPosts(
+  db: AppDb,
+  now = new Date(),
+  opts: { limit?: number; offset?: number } = {},
+): Promise<PostWithMedia[]> {
   const rows = await db.query.posts.findMany({
     where: publishedWhere(now),
-    orderBy: [desc(sql`coalesce(${posts.publishedAt}, ${posts.publishAt}, ${posts.createdAt})`)],
+    orderBy: [
+      desc(sql`coalesce(${posts.publishedAt}, ${posts.publishAt}, ${posts.createdAt})`),
+      desc(posts.id),
+    ],
     with: { media: { orderBy: [asc(media.sortOrder), asc(media.createdAt)] } },
+    limit: opts.limit,
+    offset: opts.offset,
   });
   return rows;
 }

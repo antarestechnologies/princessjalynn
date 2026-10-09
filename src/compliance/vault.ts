@@ -379,6 +379,36 @@ export async function linkMedia(
   return { ok: true };
 }
 
+/** Links every not-yet-compliant media item on a post to one performer. For back-catalogue imports. */
+export async function linkAllMediaOnPost(
+  db: AppDb,
+  kr: VaultKeyring,
+  actor: Actor,
+  input: { postId: string; performerId: string; productionDate: string },
+  now = new Date(),
+): Promise<{ linked: number; errors: string[] }> {
+  const items = await db.select({ id: media.id }).from(media).where(eq(media.postId, input.postId));
+  const done = await compliantMediaIds(
+    db,
+    items.map((i) => i.id),
+  );
+  let linked = 0;
+  const errors: string[] = [];
+  for (const m of items) {
+    if (done.has(m.id)) continue;
+    const r = await linkMedia(
+      db,
+      kr,
+      actor,
+      { mediaId: m.id, performerId: input.performerId, productionDate: input.productionDate },
+      now,
+    );
+    if (r.ok) linked++;
+    else if (!errors.includes(r.error)) errors.push(r.error);
+  }
+  return { linked, errors };
+}
+
 export async function unlinkMedia(db: AppDb, actor: Actor, linkId: string) {
   const rows = await db.delete(mediaPerformers).where(eq(mediaPerformers.id, linkId)).returning();
   if (rows[0]) {

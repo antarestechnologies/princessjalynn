@@ -133,6 +133,25 @@ link from the terminal, sign in, go to `/verify-age` and pick an outcome on the 
   record unreadable. Keep an offline copy with the custodian of records. The attorney must
   approve this structure before real documents go in.
 
+## Phase 6: hardening and launch
+
+- Security review, with the route-by-route auth table, IDOR, CSRF, SSRF and upload findings:
+  `docs/security/phase6-review.md`. `src/security/auth-guards.test.ts` fails the build if a
+  server action or route handler is added without an authorization check.
+- CSP with per-request nonces, HSTS and other headers are set in the proxy
+  (`src/lib/security-headers.ts`). State-changing cookie route handlers reject cross-site
+  requests. Playback refresh is rate limited per user.
+- CI audits production dependencies on every push. `.github/workflows/uptime.yml` checks
+  `/api/health` every 15 minutes once the `APP_URL` repository variable is set.
+- Backups, the tested restore, monitoring and load-test results: `docs/runbooks/operations.md`.
+  `scripts/backup.sh`, `scripts/restore-check.sh`, `scripts/load-seed.ts`, `scripts/load-test.ts`.
+- Fans can download all their data and delete their account at `/account/privacy`. Deletion
+  cancels billing first and does nothing if the processor cannot be reached.
+- The feed is paged (24 per page) after the load test showed the unpaged feed collapsing with
+  a large back catalogue.
+- OnlyFans migration plan and announcement draft: `docs/launch/onlyfans-migration.md`.
+  Launch checklist for sign-off: `docs/launch/launch-checklist.md`.
+
 ## Deploying on Vercel
 
 `vercel.json` pins the framework to Next.js. Production and preview deployments both run with
@@ -143,6 +162,7 @@ deployment needs these variables:
 - **Email:** `EMAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `EMAIL_FROM`.
 - **Media:** `MEDIA_PROVIDER=bunny` and the eight `BUNNY_*` variables.
 - **Staging only:** `ALLOW_FAKE_PAYMENTS=true`, `ALLOW_STUB_AGE_VERIFIER=true`. Never set these on the live site.
+- **Optional:** `CHECKOUT_ORIGIN` (the processor's hosted-checkout origin, added to the CSP), `ADMIN_NOTIFY_EMAIL`.
 
 Run `npm run db:migrate` against the Neon database before the first deploy and after any
 deploy that adds a migration.

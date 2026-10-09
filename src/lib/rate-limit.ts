@@ -67,4 +67,7 @@ export const RATE_RULES = {
   ageVerifyPerUser: { limit: 5, windowSeconds: 24 * 60 * 60 },
   takedownPerIp: { limit: 5, windowSeconds: 60 * 60 },
   vaultUnlockPerUser: { limit: 5, windowSeconds: 15 * 60 },
+  playbackPerUser: { limit: 120, windowSeconds: 60 },
+  accountExportPerUser: { limit: 3, windowSeconds: 24 * 60 * 60 },
+  accountDeletePerUser: { limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;

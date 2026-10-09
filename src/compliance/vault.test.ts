@@ -349,3 +349,45 @@ describe("export", () => {
       expect(dump).not.toContain(secret);
   });
 });
+
+describe("bulk linking", () => {
+  it("links every unlinked item on a post in one step and skips ones already linked", async () => {
+    const { linkAllMediaOnPost } = await import("./vault");
+    const [p] = await t.db
+      .insert(posts)
+      .values({ title: "Back catalogue", tier: "subscriber" })
+      .returning();
+    const rows = await t.db
+      .insert(media)
+      .values(
+        [0, 1, 2].map((i) => ({
+          postId: p.id,
+          kind: "image" as const,
+          provider: "fake",
+          providerAssetId: `bulk${i}`,
+          status: "ready" as const,
+        })),
+      )
+      .returning();
+    const perf = await makeVerifiedPerformer(t.db, kr, adminId, { stageName: "Bulk" });
+    await linkMedia(t.db, kr, actor(), {
+      mediaId: rows[0].id,
+      performerId: perf,
+      productionDate: "2024-05-05",
+    });
+    const r = await linkAllMediaOnPost(t.db, kr, actor(), {
+      postId: p.id,
+      performerId: perf,
+      productionDate: "2024-05-05",
+    });
+    expect(r).toEqual({ linked: 2, errors: [] });
+    expect(
+      (
+        await compliantMediaIds(
+          t.db,
+          rows.map((x) => x.id),
+        )
+      ).size,
+    ).toBe(3);
+  });
+});

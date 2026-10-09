@@ -46,6 +46,9 @@ export default async function AccountPage() {
         <Link href="/account/billing" className="block text-sm underline">
           Membership and billing
         </Link>
+        <Link href="/account/privacy" className="block text-sm underline">
+          Privacy, data download and account deletion
+        </Link>
         <form action={signOutAction}>
           <Button variant="secondary">Sign out</Button>
         </form>

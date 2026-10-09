@@ -92,6 +92,7 @@ Claude Code should research and report; Carson decides.
 - Data export for fans (privacy) and account deletion
 - Migration plan from OnlyFans: announcement copy, promo window, how fans re-subscribe. No scraping or automated import from OnlyFans; her own content comes from her own files.
 - Done when: Carson signs off on a launch checklist and the processor has approved the live site.
+- **Built (2026-10-09):** security review, CSP and headers, auth-guard test, backups with a tested restore, uptime check, load test (feed paged as a result), fan data export and deletion, migration plan. The checklist is `docs/launch/launch-checklist.md`; its code blockers are the real processor and age-verification adapters.
 
 ## Open questions for Carson
 

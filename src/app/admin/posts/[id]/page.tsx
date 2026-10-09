@@ -15,6 +15,7 @@ import { MediaUploader } from "../media-uploader";
 import { PostForm } from "../post-form";
 import { PublishControls } from "./publish-controls";
 import { LinkPerformerForm } from "./link-performer";
+import { LinkAllForm } from "./link-all";
 import { linksForMedia, verifiedPerformerOptions } from "@/compliance/vault";
 
 export default async function EditPostPage({ params }: { params: Promise<{ id: string }> }) {
@@ -134,6 +135,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
             );
           })}
         </div>
+        {unlinked > 0 && <LinkAllForm postId={post.id} performers={performerOptions} />}
         <MediaUploader postId={post.id} postTitle={post.title} />
       </section>
 

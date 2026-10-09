@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { crossSiteRejection } from "@/lib/same-origin";
 import { addDocument } from "@/compliance/vault";
 import { getVaultKeyring, vaultActorOrNull } from "@/compliance/vault-session";
 import { getDb } from "@/db/client";
@@ -17,6 +18,8 @@ const KINDS = new Set([
 
 /** Multipart upload from the performer page. Bytes are encrypted before they reach the database. */
 export async function POST(request: NextRequest) {
+  const csrf = crossSiteRejection(request);
+  if (csrf) return csrf;
   const actor = await vaultActorOrNull();
   if (!actor) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   let form: FormData;

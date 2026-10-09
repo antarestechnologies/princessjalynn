@@ -18,7 +18,7 @@ import { getImageStorage, getVideoProvider } from "@/media";
 import type { UploadInstructions } from "@/media/types";
 import { logger } from "@/lib/logger";
 import { requestMeta } from "@/auth/session";
-import { linkMedia, unlinkMedia } from "@/compliance/vault";
+import { linkAllMediaOnPost, linkMedia, unlinkMedia } from "@/compliance/vault";
 import { getVaultKeyring } from "@/compliance/vault-session";
 
 export interface AdminActionState {
@@ -190,4 +190,29 @@ export async function unlinkPerformerAction(form: FormData): Promise<void> {
   const postId = String(form.get("postId") ?? "");
   if (/^[0-9a-f-]{36}$/.test(linkId)) await unlinkMedia(getDb(), { userId: admin.id }, linkId);
   revalidatePath(`/admin/posts/${postId}`);
+}
+
+export async function linkAllAction(
+  _prev: AdminActionState,
+  form: FormData,
+): Promise<AdminActionState> {
+  const admin = await requireAdmin();
+  const meta = await requestMeta();
+  const postId = String(form.get("postId") ?? "");
+  const performerId = String(form.get("performerId") ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(postId) || !/^[0-9a-f-]{36}$/.test(performerId))
+    return { error: "Bad request." };
+  const r = await linkAllMediaOnPost(
+    getDb(),
+    getVaultKeyring(),
+    { userId: admin.id, ipPrefix: meta.ipPrefix },
+    {
+      postId,
+      performerId,
+      productionDate: String(form.get("productionDate") ?? ""),
+    },
+  );
+  revalidatePath(`/admin/posts/${postId}`);
+  if (r.errors.length) return { error: r.errors.map((e) => LINK_ERRORS[e] ?? e).join(" ") };
+  return { ok: true };
 }
