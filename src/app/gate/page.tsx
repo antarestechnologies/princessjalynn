@@ -29,8 +29,20 @@ export default async function GatePage({
           material.
         </p>
         <p className="mt-2 text-xs text-zinc-500">
-          Terms, privacy and compliance notices: [ATTORNEY COPY NEEDED]. Members are also asked to
-          complete age verification with an independent provider before viewing content.
+          See the{" "}
+          <a href="/legal/terms" className="underline">
+            terms
+          </a>
+          ,{" "}
+          <a href="/legal/privacy" className="underline">
+            privacy policy
+          </a>{" "}
+          and{" "}
+          <a href="/legal/2257" className="underline">
+            2257 statement
+          </a>
+          . Members are also asked to complete age verification with an independent provider before
+          viewing content.
         </p>
         <form action={enterGateAction} className="mt-5 space-y-3">
           <input type="hidden" name="confirm" value="yes" />

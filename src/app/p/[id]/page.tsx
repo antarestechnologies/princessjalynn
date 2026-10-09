@@ -4,6 +4,7 @@ import { loadViewerContext, resolveAccess } from "@/access/entitlements";
 import { requestMeta, requireVerifiedUser } from "@/auth/session";
 import { issueViewGrants, previewUrl } from "@/content/playback";
 import { getPost } from "@/content/service";
+import { compliantMediaIds } from "@/compliance/vault";
 import { getDb } from "@/db/client";
 import { getImageStorage, getVideoProvider } from "@/media";
 import { MediaViewer } from "@/components/media-viewer";
@@ -15,8 +16,17 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const user = await requireVerifiedUser(`/p/${id}`);
   const db = getDb();
   const now = new Date();
-  const post = await getPost(db, id);
-  if (!post) notFound();
+  const loaded = await getPost(db, id);
+  if (!loaded) notFound();
+  // Never show a media item that lacks a verified 2257 link, even if it was added after publishing.
+  const ok =
+    user.role === "admin"
+      ? null
+      : await compliantMediaIds(
+          db,
+          loaded.media.map((m) => m.id),
+        );
+  const post = ok ? { ...loaded, media: loaded.media.filter((m) => ok.has(m.id)) } : loaded;
   const ctx = await loadViewerContext(db, user, now);
   const access = resolveAccess(ctx, post, now);
   if (!access.allowed && access.reason === "not_published") notFound();
@@ -69,7 +79,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     const grants = await issueViewGrants(
       db,
       { video: getVideoProvider(), storage },
-      { user, items: post!.media, ipPrefix: meta.ipPrefix },
+      { user, items: post.media, ipPrefix: meta.ipPrefix },
       now,
     );
     void postId;

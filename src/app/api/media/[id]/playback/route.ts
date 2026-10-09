@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { resolveAccessFor } from "@/access/entitlements";
 import { getCurrentUser, requestMeta } from "@/auth/session";
 import { getMedia } from "@/content/service";
+import { compliantMediaIds } from "@/compliance/vault";
 import { issueViewGrants } from "@/content/playback";
 import { getDb } from "@/db/client";
 import { getImageStorage, getVideoProvider } from "@/media";
@@ -22,6 +23,9 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   if (!m) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const access = await resolveAccessFor(db, user, m.post);
   if (!access.allowed) return NextResponse.json({ error: access.reason }, { status: 403 });
+  if (user.role !== "admin" && !(await compliantMediaIds(db, [m.id])).has(m.id)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   try {
     const meta = await requestMeta();
     const grants = await issueViewGrants(

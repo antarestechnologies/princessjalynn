@@ -65,4 +65,6 @@ export const RATE_RULES = {
   resendVerifyPerUser: { limit: 3, windowSeconds: 60 * 60 },
   resetPerIp: { limit: 10, windowSeconds: 60 * 60 },
   ageVerifyPerUser: { limit: 5, windowSeconds: 24 * 60 * 60 },
+  takedownPerIp: { limit: 5, windowSeconds: 60 * 60 },
+  vaultUnlockPerUser: { limit: 5, windowSeconds: 15 * 60 },
 } as const satisfies Record<string, RateLimitRule>;

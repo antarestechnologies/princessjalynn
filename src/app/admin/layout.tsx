@@ -10,6 +10,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <span className="font-semibold text-zinc-100">Admin</span>
         <Link href="/admin/posts">Posts</Link>
         <Link href="/admin/revenue">Revenue</Link>
+        <Link href="/admin/takedowns">Reports</Link>
+        <Link href="/admin/vault">2257 vault</Link>
         {fakePaymentsAllowed() && <Link href="/admin/fake-payments">Fake payments</Link>}
         <Link href="/feed">View site</Link>
       </nav>

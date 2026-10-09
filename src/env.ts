@@ -21,6 +21,16 @@ const schema = z
     /** e.g. "Members <no-reply@example.com>". Must be a sender verified at SendGrid. */
     EMAIL_FROM: z.string().min(3).default("Members <no-reply@localhost>"),
     AGE_VERIFIER: z.enum(["stub"]).default("stub"),
+    /** 32 random bytes, base64. Encrypts 2257 vault records and documents. Required in production. */
+    VAULT_ENCRYPTION_KEY: z
+      .string()
+      .refine(
+        (v) => Buffer.from(v, "base64").length === 32,
+        "must be 32 bytes, base64 (openssl rand -base64 32)",
+      )
+      .optional(),
+    /** Optional: where new takedown requests are reported. */
+    ADMIN_NOTIFY_EMAIL: z.string().email().optional(),
     /** fake = in-app simulated processor (dev only). Real adapters are added once a processor approves. */
     PAYMENT_PROCESSOR: z.enum(["fake"]).default("fake"),
     ALLOW_FAKE_PAYMENTS: z
@@ -71,6 +81,13 @@ const schema = z
             "console mailer only prints links to the log; set EMAIL_PROVIDER=sendgrid in production",
         });
       }
+    }
+    if (v.NODE_ENV === "production" && !v.VAULT_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["VAULT_ENCRYPTION_KEY"],
+        message: "required in production",
+      });
     }
     if (v.NODE_ENV === "production" && v.PAYMENT_PROCESSOR === "fake" && !v.ALLOW_FAKE_PAYMENTS) {
       ctx.addIssue({

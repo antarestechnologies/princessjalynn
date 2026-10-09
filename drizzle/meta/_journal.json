@@ -36,6 +36,13 @@
       "when": 1791564111135,
       "tag": "0004_phase4_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791565034682,
+      "tag": "0005_phase5_compliance",
+      "breakpoints": true
     }
   ]
 }

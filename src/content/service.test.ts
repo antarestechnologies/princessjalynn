@@ -8,6 +8,7 @@ import { signUp } from "@/auth/service";
 import { auditLog, playbackGrants, users } from "@/db/schema";
 import { createTestDb } from "@/db/test-db";
 import { FakeImageStorage, FakeVideoProvider } from "@/media/fake";
+import { link, makeVerifiedPerformer, testKeyring } from "@/compliance/testing";
 import { issueViewGrants, PLAYBACK_TTL_SECONDS } from "./playback";
 import {
   createImageMedia,
@@ -23,6 +24,8 @@ let t: Awaited<ReturnType<typeof createTestDb>>;
 let storage: FakeImageStorage;
 let video: FakeVideoProvider;
 let admin: typeof users.$inferSelect;
+let performerId: string;
+const kr = testKeyring();
 const S = "test-secret-that-is-at-least-32-characters-long";
 
 beforeAll(async () => {
@@ -44,6 +47,7 @@ beforeAll(async () => {
     .set({ role: "admin", emailVerifiedAt: new Date(), ageVerifiedAt: new Date() })
     .where(eq(users.id, r.userId));
   admin = (await t.db.query.users.findFirst({ where: eq(users.id, r.userId) }))!;
+  performerId = await makeVerifiedPerformer(t.db, kr, admin.id);
 });
 afterAll(async () => {
   await t.close();
@@ -72,6 +76,14 @@ describe("posts and media", () => {
     expect(m.storageKey).toMatch(/^images\/.+\/original\.jpg$/);
     expect(await storage.exists(m.blurredPreviewKey!)).toBe(true);
 
+    // 2257 gate: an unlinked media item blocks publishing.
+    expect(await publishPost(t.db, admin.id, post.id, null)).toEqual({
+      ok: false,
+      error: "missing_2257",
+      mediaIds: [m.id],
+    });
+    await link(t.db, kr, admin.id, m.id, performerId);
+
     const pub = await publishPost(t.db, admin.id, post.id, null);
     expect(pub.ok && pub.post.status).toBe("published");
     expect((await listPublishedPosts(t.db)).map((p) => p.id)).toContain(post.id);
@@ -89,7 +101,8 @@ describe("posts and media", () => {
     })
       .jpeg()
       .toBuffer();
-    await createImageMedia(t.db, storage, admin.id, post.id, jpeg);
+    const m = await createImageMedia(t.db, storage, admin.id, post.id, jpeg);
+    await link(t.db, kr, admin.id, m.id, performerId);
     const when = new Date(Date.now() + 60 * 60 * 1000);
     const r = await publishPost(t.db, admin.id, post.id, when);
     expect(r.ok && r.post.status).toBe("scheduled");

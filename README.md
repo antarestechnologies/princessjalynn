@@ -104,6 +104,49 @@ link from the terminal, sign in, go to `/verify-age` and pick an outcome on the 
 - Adding a real processor means one new adapter file plus an entry in `src/payments/index.ts`.
   The state machine and tests do not change.
 
+## Phase 5: compliance
+
+- Legal pages live under `/legal/*`: terms, privacy, refunds, DMCA, 2257 statement, contact
+  and the content report form. They are reachable before the age gate and contain no adult
+  content. Each one is a placeholder marked `[ATTORNEY COPY NEEDED]` that lists what counsel
+  must supply. No legal text was written. Every page links to them from the footer.
+- `/legal/takedown` is a public report form with a honeypot, timing check and a per-IP rate
+  limit. It emails nobody but `ADMIN_NOTIFY_EMAIL`, if set, so it cannot be used as a relay.
+  Admins work the queue at `/admin/takedowns`. Every status change is audited.
+- The 2257 vault (`/admin/vault`) is admin-only and also needs a password re-entry every 10
+  minutes. Performer identity data (legal name, aliases, date of birth, ID details) is stored
+  only as AES-256-GCM ciphertext. ID scans, releases and consent forms are encrypted the same
+  way and stored in Postgres, never in the media bucket. Each ciphertext is bound to its own
+  row, so copying it elsewhere makes it unreadable.
+- Every vault read writes an audit row first: list, view, download, export, unlock and
+  failed unlock. Audit metadata and logs carry ids only, never identity data.
+- A performer is "verified" only with an uploaded ID front and a date of birth at least 18
+  years ago. The post editor links each media item to a verified performer with a production
+  date, and refuses a link if the performer was under 18 on that date.
+- A post cannot be published unless every media item on it is linked to a verified record.
+  Fan-facing pages and the playback API also drop any media item that lacks a link, so media
+  added after publishing stays hidden until it is linked.
+- Links keep the original media id and post title even if the media is deleted, because the
+  records must outlive the content. `/api/admin/vault/export` downloads the full index as CSV
+  with identity fields decrypted and spreadsheet-formula injection neutralised.
+- `VAULT_ENCRYPTION_KEY` (32 bytes, base64) is required in production. Losing it makes every
+  record unreadable. Keep an offline copy with the custodian of records. The attorney must
+  approve this structure before real documents go in.
+
+## Deploying on Vercel
+
+`vercel.json` pins the framework to Next.js. Production and preview deployments both run with
+`NODE_ENV=production`, so the environment checks in `src/env.ts` apply to previews too. A
+deployment needs these variables:
+
+- **Always:** `APP_URL`, `DATABASE_URL` (Neon pooled URL), `SESSION_SECRET`, `VAULT_ENCRYPTION_KEY`.
+- **Email:** `EMAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `EMAIL_FROM`.
+- **Media:** `MEDIA_PROVIDER=bunny` and the eight `BUNNY_*` variables.
+- **Staging only:** `ALLOW_FAKE_PAYMENTS=true`, `ALLOW_STUB_AGE_VERIFIER=true`. Never set these on the live site.
+
+Run `npm run db:migrate` against the Neon database before the first deploy and after any
+deploy that adds a migration.
+
 ## Database changes
 
 1. Edit `src/db/schema.ts`.

@@ -1,6 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import {
   bigserial,
+  customType,
+  date,
   boolean,
   check,
   index,
@@ -56,6 +58,15 @@ export const takedownStatus = pgEnum("takedown_status", [
   "rejected",
 ]);
 export const authTokenKind = pgEnum("auth_token_kind", ["email_verify", "password_reset"]);
+export const performerStatus = pgEnum("performer_status", ["draft", "verified", "retired"]);
+export const vaultDocumentKind = pgEnum("vault_document_kind", [
+  "id_front",
+  "id_back",
+  "selfie_with_id",
+  "model_release",
+  "consent",
+  "other",
+]);
 export const checkoutKind = pgEnum("checkout_kind", ["subscription", "ppv", "tip"]);
 export const checkoutStatus = pgEnum("checkout_status", [
   "pending",
@@ -507,5 +518,79 @@ export const subscriptionPayments = pgTable(
   (t) => [
     uniqueIndex("subscription_payments_txn_idx").on(t.processor, t.processorTransactionId),
     index("subscription_payments_sub_idx").on(t.subscriptionId, t.createdAt),
+  ],
+);
+
+// ---------- 2257 vault (Phase 5) ----------
+/** bytea that reads back as a Buffer from both node-postgres and PGlite. */
+const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
+  dataType: () => "bytea",
+  toDriver: (v) => v,
+  fromDriver: (v) => (Buffer.isBuffer(v) ? v : Buffer.from(v)),
+});
+
+/**
+ * One row per performer (in practice: the creator). Everything identifying (legal name, date
+ * of birth, ID numbers, aliases) is in piiCiphertext, encrypted with VAULT_ENCRYPTION_KEY
+ * (AES-256-GCM). Only the stage name and status are plaintext, so a database dump, a backup
+ * or a log line never contains identity data. Admin-only; every read is audited.
+ * The attorney must review this structure before real records go in (PLAN.md Phase 5).
+ */
+export const performers = pgTable("performers", {
+  id: uuid().primaryKey().defaultRandom(),
+  stageName: text().notNull(),
+  status: performerStatus().notNull().default("draft"),
+  piiCiphertext: bytea().notNull(),
+  keyVersion: text().notNull(),
+  verifiedAt: timestamp({ withTimezone: true }),
+  verifiedByUserId: uuid().references(() => users.id, { onDelete: "set null" }),
+  ...timestamps,
+});
+
+/** ID scans, releases and consent forms. Encrypted bytes live here, never in the media bucket. */
+export const vaultDocuments = pgTable(
+  "vault_documents",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    performerId: uuid()
+      .notNull()
+      .references(() => performers.id, { onDelete: "restrict" }),
+    kind: vaultDocumentKind().notNull(),
+    contentType: text().notNull(),
+    sizeBytes: integer().notNull(),
+    /** sha256 of the plaintext, hex. Lets an export prove a document was not altered. */
+    sha256: text().notNull(),
+    ciphertext: bytea().notNull(),
+    keyVersion: text().notNull(),
+    uploadedByUserId: uuid().references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("vault_documents_performer_idx").on(t.performerId)],
+);
+
+/**
+ * The 2257 index: which performer appears in which depiction, and when it was produced.
+ * mediaRef keeps the original media id even if the media row is later deleted, because the
+ * records must outlive the content (retention period: attorney to confirm).
+ */
+export const mediaPerformers = pgTable(
+  "media_performers",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    mediaId: uuid().references(() => media.id, { onDelete: "set null" }),
+    mediaRef: uuid().notNull(),
+    /** Snapshot so the export still reads sensibly after the post is edited or removed. */
+    postTitleSnapshot: text().notNull(),
+    performerId: uuid()
+      .notNull()
+      .references(() => performers.id, { onDelete: "restrict" }),
+    productionDate: date({ mode: "string" }).notNull(),
+    createdByUserId: uuid().references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("media_performers_ref_performer_idx").on(t.mediaRef, t.performerId),
+    index("media_performers_media_idx").on(t.mediaId),
+    index("media_performers_performer_idx").on(t.performerId),
   ],
 );

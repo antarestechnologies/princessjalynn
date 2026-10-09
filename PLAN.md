@@ -82,6 +82,7 @@ Claude Code should research and report; Carson decides.
 - 2257 vault (admin-only): performer record, ID document uploads (encrypted at rest), and an index linking each piece of media to its record, exportable on request. Attorney reviews the structure before real documents go in.
 - Audit log for admin actions and for any access to the vault
 - Done when: a media item cannot be published without a linked 2257 record, and a vault access appears in the audit log.
+- **Built (2026-10-09):** vault records are encrypted in Postgres, not object storage, and need a password re-entry every 10 minutes. A link is refused if the performer was under 18 on the production date. The custodian of records is still open question 4 below; the attorney must approve the structure before real documents go in.
 
 ## Phase 6 — Hardening and launch
 

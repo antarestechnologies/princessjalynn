@@ -17,6 +17,9 @@ import { getDb } from "@/db/client";
 import { getImageStorage, getVideoProvider } from "@/media";
 import type { UploadInstructions } from "@/media/types";
 import { logger } from "@/lib/logger";
+import { requestMeta } from "@/auth/session";
+import { linkMedia, unlinkMedia } from "@/compliance/vault";
+import { getVaultKeyring } from "@/compliance/vault-session";
 
 export interface AdminActionState {
   error?: string;
@@ -80,7 +83,9 @@ export async function publishPostAction(
           ? "Add at least one finished photo or video before publishing."
           : result.error === "bad_schedule"
             ? "That schedule time is not valid."
-            : "Post not found.",
+            : result.error === "missing_2257"
+              ? `${result.mediaIds?.length ?? 0} media item(s) are not linked to a verified 2257 record. Link every item below before publishing.`
+              : "Post not found.",
     };
   }
   revalidatePath(`/admin/posts/${id}`);
@@ -139,5 +144,50 @@ export async function deleteMediaAction(form: FormData): Promise<void> {
   const postId = String(form.get("postId") ?? "");
   if (/^[0-9a-f-]{36}$/.test(mediaId))
     await deleteMedia(getDb(), getVideoProvider(), getImageStorage(), admin.id, mediaId);
+  revalidatePath(`/admin/posts/${postId}`);
+}
+
+const LINK_ERRORS: Record<string, string> = {
+  media_not_found: "Media not found.",
+  performer_not_verified: "That record is not verified.",
+  underage_at_production:
+    "The performer was under 18 on that production date. This cannot be linked.",
+  future_date: "The production date cannot be in the future.",
+  bad_date: "Enter the date the content was produced.",
+  duplicate: "Already linked.",
+};
+
+/** Links media to a verified 2257 record (stage names only on this page; no vault unlock). Audited. */
+export async function linkPerformerAction(
+  _prev: AdminActionState,
+  form: FormData,
+): Promise<AdminActionState> {
+  const admin = await requireAdmin();
+  const meta = await requestMeta();
+  const mediaId = String(form.get("mediaId") ?? "");
+  const postId = String(form.get("postId") ?? "");
+  const performerId = String(form.get("performerId") ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(mediaId) || !/^[0-9a-f-]{36}$/.test(performerId))
+    return { error: "Bad request." };
+  const r = await linkMedia(
+    getDb(),
+    getVaultKeyring(),
+    { userId: admin.id, ipPrefix: meta.ipPrefix },
+    {
+      mediaId,
+      performerId,
+      productionDate: String(form.get("productionDate") ?? ""),
+    },
+  );
+  if (!r.ok) return { error: LINK_ERRORS[r.error] };
+  revalidatePath(`/admin/posts/${postId}`);
+  return { ok: true };
+}
+
+export async function unlinkPerformerAction(form: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const linkId = String(form.get("linkId") ?? "");
+  const postId = String(form.get("postId") ?? "");
+  if (/^[0-9a-f-]{36}$/.test(linkId)) await unlinkMedia(getDb(), { userId: admin.id }, linkId);
   revalidatePath(`/admin/posts/${postId}`);
 }

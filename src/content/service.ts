@@ -5,6 +5,7 @@ import { media, posts } from "@/db/schema";
 import type { AppDb } from "@/db/types";
 import { blurForPreview, posterFromBuffer, processImage } from "@/media/images";
 import type { ImageStorage, UploadInstructions, VideoProvider } from "@/media/types";
+import { compliantMediaIds } from "@/compliance/vault";
 
 export type Post = typeof posts.$inferSelect;
 export type Media = typeof media.$inferSelect;
@@ -119,10 +120,16 @@ export async function updatePost(
 }
 
 export type PublishResult =
-  { ok: true; post: Post } | { ok: false; error: "not_found" | "no_ready_media" | "bad_schedule" };
+  | { ok: true; post: Post }
+  | {
+      ok: false;
+      error: "not_found" | "no_ready_media" | "bad_schedule" | "missing_2257";
+      mediaIds?: string[];
+    };
 
 /**
- * Publishing requires at least one ready media item. (Phase 5 adds: and a linked 2257 record.)
+ * Publishing requires at least one ready media item, and EVERY media item on the post (ready
+ * or still processing) must be linked to a verified 2257 performer record.
  * publishAt in the future => scheduled; otherwise published now.
  */
 export async function publishPost(
@@ -136,6 +143,21 @@ export async function publishPost(
   if (!post) return { ok: false, error: "not_found" };
   if (!post.media.some((m) => m.status === "ready")) return { ok: false, error: "no_ready_media" };
   if (publishAt && Number.isNaN(publishAt.getTime())) return { ok: false, error: "bad_schedule" };
+  const compliant = await compliantMediaIds(
+    db,
+    post.media.map((m) => m.id),
+  );
+  const missing = post.media.filter((m) => !compliant.has(m.id)).map((m) => m.id);
+  if (missing.length) {
+    await recordAudit(db, {
+      actorUserId: adminId,
+      action: "post.publish.blocked_2257",
+      targetType: "post",
+      targetId: id,
+      metadata: { missing: missing.length },
+    });
+    return { ok: false, error: "missing_2257", mediaIds: missing };
+  }
 
   const scheduled = !!publishAt && publishAt.getTime() > now.getTime();
   const [row] = await db
